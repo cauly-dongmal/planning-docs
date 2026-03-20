@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PointClick RCPC 어드민 UI 기획</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Noto Sans KR', 'sans-serif'] }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { margin: 0; font-family: 'Noto Sans KR', sans-serif; background: #f1f5f9; }
+    #root { min-height: 100vh; }
+    @keyframes fadeInUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .fade-in { animation: fadeInUp 0.3s ease-out; }
+    .toggle-track { transition: background-color 0.2s; }
+    .toggle-thumb { transition: transform 0.2s; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel" data-type="module">
+    const { useState, useCallback } = React;
+
+    /* ─── 토글 컴포넌트 ─── */
+    function Toggle({ checked, onChange, label }) {
+      return (
+        <label className="flex items-center gap-3 cursor-pointer">
+          <div
+            onClick={() => onChange(!checked)}
+            className={`relative w-11 h-6 rounded-full toggle-track ${checked ? 'bg-blue-600' : 'bg-gray-300'}`}
+          >
+            <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow toggle-thumb ${checked ? 'translate-x-5' : ''}`} />
+          </div>
+          <span className="text-sm text-gray-700 font-medium">{label}</span>
+        </label>
+      );
+    }
+
+    /* ─── 셀렉트 컴포넌트 ─── */
+    function Select({ value, onChange, options, label, required }) {
+      return (
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">
+            {required && <span className="text-red-500 mr-0.5">*</span>}{label}
+          </label>
+          <select
+            value={value}
+            onChange={e => onChange(e.target.value)}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+          >
+            {options.map(opt => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </div>
+      );
+    }
+
+    /* ─── 인풋 컴포넌트 ─── */
+    function Input({ value, onChange, label, placeholder, required, helperText, isNew }) {
+      return (
+        <div>
+          <label className="flex items-center gap-2 text-xs font-medium text-gray-600 mb-1">
+            {required && <span className="text-red-500">*</span>}
+            {label}
+            {isNew && <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded font-bold">신규</span>}
+          </label>
+          <input
+            type="text"
+            value={value}
+            onChange={e => onChange(e.target.value)}
+            placeholder={placeholder}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+          />
+          {helperText && <p className="text-[11px] text-gray-400 mt-1">{helperText}</p>}
+        </div>
+      );
+    }
+
+    /* ─── 문구 설정 컴포넌트 ─── */
+    function TextSettings({ settings, onChange }) {
+      const update = (key, val) => onChange({ ...settings, [key]: val });
+      return (
+        <div className="space-y-3">
+          <Input label="섹션명" value={settings.sectionName} onChange={v => update('sectionName', v)} placeholder="보는 광고" isNew required />
+          <Input label="타이틀 문구" value={settings.title} onChange={v => update('title', v)} placeholder="매일 광고 클릭하고 리워드 받자!" isNew required />
+          <Input label="설명 문구" value={settings.description} onChange={v => update('description', v)} placeholder="매일 1시간마다 광고 누르면 리워드 지급" isNew />
+          <Input label="페이지 타이틀" value={settings.pageTitle} onChange={v => update('pageTitle', v)} placeholder="RCPC" isNew />
+        </div>
+      );
+    }
+
+    /* ─── 메인 어드민 앱 ─── */
+    function App() {
+      const [activeTab, setActiveTab] = useState('rcpc');
+      const [saved, setSaved] = useState(false);
+      const [showValidation, setShowValidation] = useState(false);
+
+      // RCPC 설정 상태
+      const [rcpcConfig, setRcpcConfig] = useState({
+        enabled: true,
+        bannerSize: '640x200',
+        adKey: '',
+        pointclickRcpc: true,
+        textSettings: {
+          sectionName: '보는 광고',
+          title: '매일 광고 클릭하고 리워드 받자!',
+          description: '매일 1시간마다 광고 누르면 리워드 지급',
+          pageTitle: 'RCPC'
+        },
+        rewardAmount: '5',
+        frequencyCap: '24',
+        cooldownHours: '1'
+      });
+
+      const tabs = [
+        { id: 'rcpc', label: 'RCPC', isNew: true },
+        { id: 'attendance', label: '출석체크' },
+        { id: 'video', label: '동영상 광고' },
+        { id: 'mission', label: '미션 설정' },
+      ];
+
+      const handleSave = () => {
+        if (!rcpcConfig.adKey) {
+          setShowValidation(true);
+          return;
+        }
+        setSaved(true);
+        setShowValidation(false);
+        setTimeout(() => setSaved(false), 2000);
+      };
+
+      const bannerSizeOptions = [
+        { value: '640x100', label: '640 × 100' },
+        { value: '640x200', label: '640 × 200' },
+        { value: '640x500', label: '640 × 500' },
+      ];
+
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 md:p-8">
+          {/* 헤더 */}
+          <div className="max-w-5xl mx-auto mb-6">
+            <div className="flex items-center gap-3 mb-1">
+              <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white text-xs font-bold">AD</div>
+              <div>
+                <h1 className="text-xl font-bold text-gray-900">RCPC 어드민 UI 기획</h1>
+                <p className="text-xs text-gray-500">콘텐츠 관리 &gt; 홈화면 관리 &gt; 상세 관리 탭업 &gt; 오퍼월 설정</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="max-w-5xl mx-auto flex flex-col lg:flex-row gap-6">
+            {/* 어드민 폼 */}
+            <div className="flex-1">
+              <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
+                {/* 팝업 헤더 */}
+                <div className="bg-gray-800 text-white px-5 py-3 flex items-center justify-between">
+                  <h2 className="text-sm font-semibold">홈화면 상세 관리</h2>
+                  <span className="text-gray-400 text-lg cursor-pointer hover:text-white">×</span>
+                </div>
+
+                {/* 탭 */}
+                <div className="border-b flex">
+                  {tabs.map(tab => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`relative px-5 py-3 text-sm font-medium transition-colors ${
+                        activeTab === tab.id
+                          ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50'
+                          : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      {tab.label}
+                      {tab.isNew && (
+                        <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[8px] px-1 py-0.5 rounded-full font-bold">NEW</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+
+                {/* 콘텐츠 */}
+                {activeTab === 'rcpc' ? (
+                  <div className="p-5 space-y-6 fade-in">
+                    {/* 기본 설정 */}
+                    <div>
+                      <h3 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
+                        기본 설정
+                        <span className="text-[10px] font-normal text-gray-400 bg-gray-100 px-2 py-0.5 rounded">필수</span>
+                      </h3>
+                      <div className="space-y-4 bg-gray-50 rounded-xl p-4">
+                        <Toggle
+                          checked={rcpcConfig.enabled}
+                          onChange={v => setRcpcConfig(prev => ({ ...prev, enabled: v }))}
+                          label="노출 상태"
+                        />
+                        <Select
+                          label="배너 이미지 사이즈"
+                          required
+                          value={rcpcConfig.bannerSize}
+                          onChange={v => setRcpcConfig(prev => ({ ...prev, bannerSize: v }))}
+                          options={bannerSizeOptions}
+                        />
+                      </div>
+                    </div>
+
+                    {/* 문구 설정 - 신규 */}
+                    <div>
+                      <h3 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
+                        문구 설정
+                        <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded font-bold">신규</span>
+                      </h3>
+                      <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
+                        <TextSettings
+                          settings={rcpcConfig.textSettings}
+                          onChange={v => setRcpcConfig(prev => ({ ...prev, textSettings: v }))}
+                        />
+                      </div>
+                      <p className="text-[11px] text-orange-600 mt-2">※ 현재 어드민 미존재 → 신규 입력 필드 개발 필요</p>
+                    </div>
+
+                    {/* 광고 연동 설정 */}
+                    <div>
+                      <h3 className="text-sm font-bold text-gray-900 mb-3">광고 연동 설정</h3>
+                      <div className="space-y-4 bg-gray-50 rounded-xl p-4">
+                        <div>
+                          <Input
+                            label="카울리 소재 (ad_key)"
+                            required
+                            isNew
+                            value={rcpcConfig.adKey}
+                            onChange={v => {
+                              setRcpcConfig(prev => ({ ...prev, adKey: v }));
+                              if (showValidation && v) setShowValidation(false);
+                            }}
+                            placeholder="고정 ad_key 값 입력"
+                            helperText="카울리/PointClick RCPC 통합 집계 기준 — 필수 입력"
+                          />
+                          {showValidation && !rcpcConfig.adKey && (
+                            <p className="text-xs text-red-500 mt-1 font-medium">⚠ ad_key는 필수 입력 항목입니다.</p>
+                          )}
+                        </div>
+
+                        <div className="border-t pt-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-medium text-gray-600">PointClick RCPC 광고 호출</span>
+                              <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded font-bold">신규</span>
+                            </div>
+                            <Toggle
+                              checked={rcpcConfig.pointclickRcpc}
+                              onChange={v => setRcpcConfig(prev => ({ ...prev, pointclickRcpc: v }))}
+                              label=""
+                            />
+                          </div>
+                          <p className="text-[11px] text-gray-400">카울리 소진 시 자동 호출 (2순위) — 동일 ad_key 기준 집계</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 리워드 설정 */}
+                    <div>
+                      <h3 className="text-sm font-bold text-gray-900 mb-3">리워드 설정</h3>
+                      <div className="space-y-3 bg-gray-50 rounded-xl p-4">
+                        <div className="grid grid-cols-2 gap-3">
+                          <Input
+                            label="리워드 지급량 (P)"
+                            value={rcpcConfig.rewardAmount}
+                            onChange={v => setRcpcConfig(prev => ({ ...prev, rewardAmount: v }))}
+                            placeholder="5"
+                          />
+                          <Input
+                            label="일일 참여 제한 (회)"
+                            value={rcpcConfig.frequencyCap}
+                            onChange={v => setRcpcConfig(prev => ({ ...prev, frequencyCap: v }))}
+                            placeholder="24"
+                          />
+                        </div>
+                        <Input
+                          label="참여 간격 (시간)"
+                          value={rcpcConfig.cooldownHours}
+                          onChange={v => setRcpcConfig(prev => ({ ...prev, cooldownHours: v }))}
+                          placeholder="1"
+                          helperText="참여 후 다음 참여까지 대기 시간"
+                        />
+                      </div>
+                    </div>
+
+                    {/* 버튼 */}
+                    <div className="flex items-center gap-3 pt-2 border-t">
+                      <button
+                        onClick={handleSave}
+                        className="bg-blue-600 text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-blue-700 transition shadow-sm"
+                      >
+                        저장
+                      </button>
+                      <button className="bg-gray-200 text-gray-600 px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-300 transition">
+                        취소
+                      </button>
+                      {saved && (
+                        <span className="text-sm text-green-600 font-medium fade-in">✅ 저장되었습니다</span>
+                      )}
+                    </div>
+
+                    {/* 주석 */}
+                    <div className="bg-slate-50 rounded-xl p-3 text-[11px] text-gray-500 space-y-0.5 border">
+                      <p>※ <span className="text-red-500 font-medium">*</span> 필수 입력 — 미입력 시 저장 불가</p>
+                      <p>※ <span className="bg-red-500 text-white px-1 rounded text-[9px]">신규</span> 항목은 현재 어드민 미존재 → 신규 입력 필드 개발 필요</p>
+                      <p>※ 광고 순서: 카울리 1순위 → PointClick RCPC 2순위 → 전체 소진 시 안내 문구 노출</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-10 text-center text-gray-400">
+                    <p className="text-lg mb-1">🔧</p>
+                    <p className="text-sm">{tabs.find(t => t.id === activeTab)?.label} 설정</p>
+                    <p className="text-xs mt-1">(기존 기능 — 이번 기획 범위 아님)</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 오른쪽: 개발 스펙 */}
+            <div className="lg:w-80 space-y-4">
+              {/* 광고 호출 순서 */}
+              <div className="bg-white rounded-2xl p-5 shadow-sm border">
+                <h4 className="text-sm font-bold text-gray-900 mb-3">광고 호출 우선순위</h4>
+                <div className="space-y-2">
+                  {[
+                    { rank: '1순위', name: '카울리 RCPC', desc: '기본 광고 소스 (직접 공급)', color: 'blue' },
+                    { rank: '2순위', name: 'PointClick RCPC', desc: '카울리 소진 시 자동 호출', color: 'indigo' },
+                    { rank: '소진 시', name: 'No-fill 안내', desc: '전체 재고 없을 시 안내 문구', color: 'gray' },
+                  ].map((item, i) => (
+                    <div key={i} className="flex items-start gap-2.5">
+                      <div className={`w-6 h-6 rounded-full bg-${item.color}-100 text-${item.color}-600 flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5`}>
+                        {i + 1}
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-gray-800">{item.rank} — {item.name}</p>
+                        <p className="text-[11px] text-gray-500">{item.desc}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 신규 개발 항목 */}
+              <div className="bg-white rounded-2xl p-5 shadow-sm border">
+                <h4 className="text-sm font-bold text-gray-900 mb-3">신규 개발 항목</h4>
+                <div className="space-y-2">
+                  {[
+                    '문구 설정 (섹션명/타이틀/설명/페이지타이틀)',
+                    '카울리 소재 ad_key 입력 필드',
+                    'PointClick RCPC 광고 호출 토글',
+                    '리워드 지급량/참여 제한 설정',
+                  ].map((item, i) => (
+                    <div key={i} className="flex items-start gap-2 text-xs">
+                      <span className="bg-red-500 text-white px-1 rounded text-[9px] flex-shrink-0 mt-0.5">신규</span>
+                      <span className="text-gray-700">{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 설정 데이터 프리뷰 */}
+              <div className="bg-white rounded-2xl p-5 shadow-sm border">
+                <h4 className="text-sm font-bold text-gray-900 mb-3">설정값 JSON 프리뷰</h4>
+                <pre className="bg-gray-900 text-green-400 rounded-lg p-3 text-[10px] overflow-x-auto">
+{JSON.stringify({
+  rcpc: {
+    enabled: rcpcConfig.enabled,
+    banner_size: rcpcConfig.bannerSize,
+    ad_key: rcpcConfig.adKey || '(미입력)',
+    pointclick_rcpc: rcpcConfig.pointclickRcpc,
+    text: rcpcConfig.textSettings,
+    reward: {
+      amount: Number(rcpcConfig.rewardAmount),
+      daily_cap: Number(rcpcConfig.frequencyCap),
+      cooldown_h: Number(rcpcConfig.cooldownHours)
+    }
+  }
+}, null, 2)}
+                </pre>
+                <p className="text-[10px] text-gray-400 mt-2">어드민에서 입력하는 값이 실시간 반영됩니다</p>
+              </div>
+
+              {/* 리포트 집계 */}
+              <div className="bg-white rounded-2xl p-5 shadow-sm border">
+                <h4 className="text-sm font-bold text-gray-900 mb-3">리포트 집계 방식</h4>
+                <div className="space-y-2 text-xs text-gray-600">
+                  <div className="flex gap-2">
+                    <span className="font-medium text-gray-800 w-14 flex-shrink-0">소재 생성</span>
+                    <span>ad_key 고정값으로 카울리 소재 생성</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <span className="font-medium text-gray-800 w-14 flex-shrink-0">단가 설정</span>
+                    <span>소재에 고정 단가 입력 → 클릭 수 × 단가 = 정산금</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <span className="font-medium text-gray-800 w-14 flex-shrink-0">집계 기준</span>
+                    <span>유효 콜백 수신 건수 기준 클릭 집계</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(React.createElement(App));
+  </script>
+</body>
+</html>
