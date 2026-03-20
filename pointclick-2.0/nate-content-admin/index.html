@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>네이트 콘텐츠 어드민 - PointClick 2.0</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- React 18 -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+  <!-- Babel (JSX 변환) -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    body { margin: 0; font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    #root { min-height: 100vh; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useMemo, useCallback, useRef } = React;
+
+    const C = {
+      bg: "#f5f5f5", white: "#ffffff", border: "#e0e0e0", borderLight: "#eeeeee",
+      text: "#333333", textSec: "#666666", textTer: "#999999",
+      blue: "#2196F3", blueLight: "#e3f2fd", green: "#4CAF50", greenLight: "#e8f5e9",
+      red: "#f44336", redLight: "#fde8e7", orange: "#FF9800",
+      headerBg: "#37474F", toggleOn: "#42A5F5", toggleOff: "#ccc",
+    };
+
+    function Toggle({ value, onChange }) {
+      return (
+        <button onClick={() => onChange(!value)} className="relative rounded-full transition-all cursor-pointer"
+          style={{ width: 44, height: 24, background: value ? C.toggleOn : C.toggleOff, border: "none", padding: 0, flexShrink: 0 }}>
+          <div className="absolute rounded-full bg-white shadow transition-all"
+            style={{ width: 20, height: 20, top: 2, left: value ? 22 : 2 }} />
+        </button>
+      );
+    }
+
+    function MediationRow({ med, onChangeMed, onChangeKey, onRemove, options }) {
+      return (
+        <div className="flex items-center gap-3 py-2 px-3" style={{ borderBottom: `1px solid ${C.borderLight}` }}>
+          <select value={med.sdk} onChange={(e) => onChangeMed(e.target.value)}
+            className="h-9 rounded px-2 text-sm" style={{ width: 180, border: `1px solid ${C.border}`, background: C.white, color: C.text }}>
+            {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+          <input type="text" value={med.key} onChange={(e) => onChangeKey(e.target.value)}
+            placeholder="미디에이션 지면 KEY 입력" className="h-9 rounded px-3 text-sm flex-1"
+            style={{ border: `1px solid ${C.border}`, color: C.text }} />
+          <button onClick={onRemove} className="w-7 h-7 rounded flex items-center justify-center cursor-pointer text-sm font-bold shrink-0"
+            style={{ background: C.redLight, color: C.red, border: `1px solid ${C.red}` }}>−</button>
+        </div>
+      );
+    }
+
+    const MED_OPTS = [
+      { value: "adfit", label: "에드핏" }, { value: "cauly", label: "카울리" },
+      { value: "admob", label: "AdMob" }, { value: "levelplay", label: "레벨플레이" },
+      { value: "applovin", label: "AppLovin" },
+    ];
+
+    function SectionItem({ item, onToggle, onUpdate, onExpand, expanded }) {
+      const addMed = () => onUpdate({ ...item, mediations: [...(item.mediations || []), { sdk: "adfit", key: "" }] });
+      const updateMed = (i, field, val) => {
+        const m = [...item.mediations]; m[i] = { ...m[i], [field]: val }; onUpdate({ ...item, mediations: m });
+      };
+      const removeMed = (i) => onUpdate({ ...item, mediations: item.mediations.filter((_, j) => j !== i) });
+
+      return (
+        <div className="rounded-lg overflow-hidden mb-3" style={{ border: `1px solid ${C.border}`, background: C.white }}>
+          <div className="flex items-center gap-3 px-4 py-3 cursor-pointer"
+            style={{ background: expanded ? "#f8f9fa" : C.white, borderBottom: expanded ? `1px solid ${C.border}` : "none" }}
+            onClick={onExpand}>
+            <span className="text-base font-bold" style={{ color: C.textSec, width: 20 }}>{expanded ? "−" : "+"}</span>
+            <input type="text" value={item.name} readOnly onClick={(e) => e.stopPropagation()}
+              className="h-9 rounded px-3 text-sm" style={{ width: 180, border: `1px solid ${C.border}`, background: "#fafafa", color: C.text }} />
+            <input type="text" value={item.subtitle} onChange={(e) => { e.stopPropagation(); onUpdate({ ...item, subtitle: e.target.value }); }}
+              onClick={(e) => e.stopPropagation()} placeholder="CRM 부제목 입력"
+              className="h-9 rounded px-3 text-sm flex-1" style={{ border: `1px solid ${C.border}`, color: C.text }} />
+            <input type="number" value={item.order} onChange={(e) => { e.stopPropagation(); onUpdate({ ...item, order: parseInt(e.target.value) || 1 }); }}
+              onClick={(e) => e.stopPropagation()} className="h-9 rounded px-2 text-sm text-center"
+              style={{ width: 50, border: `1px solid ${C.border}`, color: C.text }} />
+            <div onClick={(e) => e.stopPropagation()}><Toggle value={item.enabled} onChange={onToggle} /></div>
+            {item.showDelete && (
+              <button onClick={(e) => { e.stopPropagation(); }} className="cursor-pointer"
+                style={{ background: "transparent", border: "none", color: C.red, fontSize: 16 }}>🗑</button>
+            )}
+            {item.canUpload && (
+              <button onClick={(e) => e.stopPropagation()} className="h-9 px-3 rounded text-xs cursor-pointer"
+                style={{ background: C.white, border: `1px solid ${C.border}`, color: C.textSec }}>업로드</button>
+            )}
+          </div>
+
+          {expanded && (
+            <div className="px-5 py-4" style={{ background: "#fafafa" }}>
+              {item.cfg && (
+                <div className="mb-4 p-4 rounded-lg" style={{ background: C.white, border: `1px solid ${C.borderLight}` }}>
+                  <p className="text-xs font-bold mb-3 pb-2" style={{ color: C.textSec, borderBottom: `1px solid ${C.borderLight}` }}>
+                    콘텐츠 설정
+                  </p>
+                  {item.cfg.type === "keyword" && (
+                    <div className="space-y-2 text-sm">
+                      <div className="flex items-center justify-between"><span style={{ color: C.text }}>갱신 주기</span><span style={{ color: C.textSec }}>20분 (네이트 API 기준)</span></div>
+                      <div className="flex items-center justify-between"><span style={{ color: C.text }}>노출 개수</span><span style={{ color: C.textSec }}>1~5위 (확장 시 6~10위)</span></div>
+                      <div className="flex items-center justify-between"><span style={{ color: C.text }}>Landing</span><span className="text-xs font-mono" style={{ color: C.blue }}>m.news.nate.com/search?q=&#123;keyword&#125;</span></div>
+                    </div>
+                  )}
+                  {item.cfg.type === "pann" && (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm shrink-0" style={{ color: C.text, width: 110 }}>판 카테고리</span>
+                        <select value={item.cfg.category} onChange={(e) => onUpdate({ ...item, cfg: { ...item.cfg, category: e.target.value } })}
+                          className="h-9 rounded px-2 text-sm flex-1" style={{ border: `1px solid ${C.border}`, color: C.text }}>
+                          <option value="talkerChoice">톡커들의 선택 (실시간)</option>
+                          <option value="bestTalk">베스트 톡톡 (추천순)</option>
+                          <option value="rankingDaily">명예의 전당 (일간)</option>
+                        </select>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm shrink-0" style={{ color: C.text, width: 110 }}>노출 형태</span>
+                        <select value={item.cfg.format} onChange={(e) => onUpdate({ ...item, cfg: { ...item.cfg, format: e.target.value } })}
+                          className="h-9 rounded px-2 text-sm flex-1" style={{ border: `1px solid ${C.border}`, color: C.text }}>
+                          <option value="post">게시물형 (썸네일+본문)</option>
+                          <option value="list">리스트형 (제목+메타)</option>
+                        </select>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm shrink-0" style={{ color: C.text, width: 110 }}>리스트 광고 간격</span>
+                        <input type="number" value={item.cfg.adInterval} onChange={(e) => onUpdate({ ...item, cfg: { ...item.cfg, adInterval: parseInt(e.target.value) || 5 } })}
+                          className="h-9 rounded px-2 text-sm" style={{ width: 60, border: `1px solid ${C.border}`, color: C.text, textAlign: "center" }} />
+                        <span className="text-xs" style={{ color: C.textTer }}>게시글 N개마다 네이티브 배너 삽입</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="mb-4 p-4 rounded-lg" style={{ background: C.white, border: `1px solid ${C.borderLight}` }}>
+                <p className="text-xs font-bold mb-3 pb-2" style={{ color: C.textSec, borderBottom: `1px solid ${C.borderLight}` }}>
+                  전면 DA 광고 설정
+                </p>
+                <div className="flex items-center gap-3 mb-2">
+                  <span className="text-sm shrink-0" style={{ color: C.text, width: 140 }}>유저당 일일 노출 제한</span>
+                  <input type="number" value={item.adCfg?.dailyLimit || 5}
+                    onChange={(e) => onUpdate({ ...item, adCfg: { ...item.adCfg, dailyLimit: parseInt(e.target.value) || 5 } })}
+                    className="h-9 rounded px-2 text-sm" style={{ width: 60, border: `1px solid ${C.border}`, color: C.text, textAlign: "center" }} />
+                  <span className="text-xs" style={{ color: C.textTer }}>회</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm shrink-0" style={{ color: C.text, width: 140 }}>닫기 버튼 활성화</span>
+                  <input type="number" value={item.adCfg?.closeDelay || 3}
+                    onChange={(e) => onUpdate({ ...item, adCfg: { ...item.adCfg, closeDelay: parseInt(e.target.value) || 3 } })}
+                    className="h-9 rounded px-2 text-sm" style={{ width: 60, border: `1px solid ${C.border}`, color: C.text, textAlign: "center" }} />
+                  <span className="text-xs" style={{ color: C.textTer }}>초 후</span>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-lg" style={{ background: C.white, border: `1px solid ${C.borderLight}` }}>
+                <div className="flex items-center justify-between mb-2 pb-2" style={{ borderBottom: `1px solid ${C.borderLight}` }}>
+                  <div className="flex items-center gap-8">
+                    <span className="text-xs font-bold" style={{ color: C.textSec }}>미디에이션</span>
+                    <span className="text-xs font-bold" style={{ color: C.textSec }}>미디에이션 지면 KEY</span>
+                  </div>
+                  <button onClick={addMed} className="w-7 h-7 rounded flex items-center justify-center cursor-pointer text-sm font-bold"
+                    style={{ background: C.blueLight, color: C.blue, border: `1px solid ${C.blue}` }}>+</button>
+                </div>
+                {(item.mediations || []).map((m, i) => (
+                  <MediationRow key={i} med={m} options={MED_OPTS}
+                    onChangeMed={(v) => updateMed(i, "sdk", v)} onChangeKey={(v) => updateMed(i, "key", v)} onRemove={() => removeMed(i)} />
+                ))}
+                {(!item.mediations || item.mediations.length === 0) && (
+                  <div className="py-4 text-center"><span className="text-sm" style={{ color: C.textTer }}>+ 버튼을 눌러 미디에이션을 추가하세요</span></div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function ReportTab() {
+      const kpis = [
+        { label: "콘텐츠 PV (일)", value: "4,280", trend: "+12.3%", up: true },
+        { label: "콘텐츠 진입률", value: "8.7%", trend: "+2.1%p", up: true },
+        { label: "평균 체류시간", value: "42초", trend: "-3.2초", up: false },
+        { label: "추정 광고매출 (일)", value: "₩18,400", trend: "+8.5%", up: true },
+      ];
+      return (
+        <div className="p-6">
+          <div className="grid grid-cols-4 gap-4 mb-6">
+            {kpis.map((k) => (
+              <div key={k.label} className="rounded-lg p-4" style={{ background: C.white, border: `1px solid ${C.border}` }}>
+                <p className="text-xs mb-1" style={{ color: C.textTer }}>{k.label}</p>
+                <p className="text-xl font-bold" style={{ color: C.text }}>{k.value}</p>
+                <p className="text-xs mt-1" style={{ color: k.up ? C.green : C.red }}>{k.trend} vs 전일</p>
+              </div>
+            ))}
+          </div>
+          <div className="rounded-lg overflow-hidden" style={{ background: C.white, border: `1px solid ${C.border}` }}>
+            <div className="px-4 py-3" style={{ background: "#f8f9fa", borderBottom: `1px solid ${C.border}` }}>
+              <span className="text-sm font-semibold" style={{ color: C.text }}>R/S 정산 예상 (이번 달)</span>
+              <span className="ml-3 text-xs px-2 py-0.5 rounded" style={{ background: C.greenLight, color: C.green }}>2안 균형형 20/20/60</span>
+            </div>
+            <table className="w-full">
+              <thead><tr style={{ borderBottom: `1px solid ${C.border}`, background: "#fafafa" }}>
+                {["주체", "비율", "추정 금액 (월)", "비고"].map((h) => (
+                  <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold" style={{ color: C.textSec }}>{h}</th>
+                ))}
+              </tr></thead>
+              <tbody>
+                {[
+                  { name: "네이트", pct: "20%", amt: "₩110,400", note: "콘텐츠 API 제공" },
+                  { name: "포인트클릭", pct: "20%", amt: "₩110,400", note: "SDK·미디에이션·어드민" },
+                  { name: "매체", pct: "60%", amt: "₩331,200", note: "유저 트래픽·지면" },
+                ].map((r) => (
+                  <tr key={r.name} style={{ borderBottom: `1px solid ${C.borderLight}` }}>
+                    <td className="px-4 py-3 text-sm" style={{ color: C.text }}>{r.name}</td>
+                    <td className="px-4 py-3 text-sm font-semibold" style={{ color: C.blue }}>{r.pct}</td>
+                    <td className="px-4 py-3 text-sm font-mono font-bold" style={{ color: C.text }}>{r.amt}</td>
+                    <td className="px-4 py-3 text-xs" style={{ color: C.textTer }}>{r.note}</td>
+                  </tr>
+                ))}
+                <tr style={{ background: "#f8f9fa" }}>
+                  <td className="px-4 py-3 text-sm font-bold">합계</td>
+                  <td className="px-4 py-3 text-sm font-semibold" style={{ color: C.textSec }}>100%</td>
+                  <td className="px-4 py-3 text-sm font-mono font-bold" style={{ color: C.green }}>₩552,000</td>
+                  <td className="px-4 py-3 text-xs" style={{ color: C.textTer }}>DAU 15K 기준</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    }
+
+    function App() {
+      const [showModal, setShowModal] = useState(false);
+      const [selectedMedia, setSelectedMedia] = useState(401);
+      const [activeTab, setActiveTab] = useState("settings");
+      const [expandedId, setExpandedId] = useState("keyword");
+
+      const medias = [
+        { id: 401, name: "MetaClub", status: "ON", dau: "12,400" },
+        { id: 289, name: "MY1PICK", status: "ON", dau: "8,200" },
+        { id: 277, name: "Genie Music", status: "OFF", dau: "5,600" },
+      ];
+
+      const [sections, setSections] = useState([
+        {
+          id: "keyword", name: "실시간 이슈 키워드", subtitle: "", order: 1, enabled: true,
+          cfg: { type: "keyword" }, adCfg: { dailyLimit: 5, closeDelay: 3 },
+          mediations: [{ sdk: "adfit", key: "DAN-Akku2fiESwB7m1ve" }, { sdk: "cauly", key: "OG068t2h" }],
+        },
+        {
+          id: "pann", name: "네이트 판", subtitle: "", order: 2, enabled: true,
+          cfg: { type: "pann", category: "talkerChoice", format: "post", adInterval: 5 },
+          adCfg: { dailyLimit: 5, closeDelay: 3 },
+          mediations: [{ sdk: "adfit", key: "DAN-Xp92kLm4nQw8r3" }, { sdk: "cauly", key: "PQ147z9x" }],
+        },
+      ]);
+
+      const updateSection = (id, data) => setSections((p) => p.map((s) => s.id === id ? data : s));
+
+      return (
+        <div className="min-h-screen" style={{ background: C.bg, fontFamily: '\'Noto Sans KR\', -apple-system, "Malgun Gothic", sans-serif' }}>
+          <div className="flex items-center gap-3 px-5 py-3" style={{ background: C.white, borderBottom: `1px solid ${C.border}` }}>
+            <span className="text-sm" style={{ color: C.textSec }}>관리자</span>
+            <span style={{ color: C.border }}>›</span>
+            <span className="text-base font-bold" style={{ color: C.text }}>☰ 네이트 콘텐츠 관리</span>
+          </div>
+
+          <div className="flex items-center gap-1 px-5 pt-4">
+            {[{ id: "settings", label: "콘텐츠 설정" }, { id: "report", label: "리포트" }].map((tab) => (
+              <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                className="px-4 py-2 text-sm cursor-pointer rounded-t-lg"
+                style={{
+                  background: activeTab === tab.id ? C.white : "transparent",
+                  color: activeTab === tab.id ? C.blue : C.textSec,
+                  border: activeTab === tab.id ? `1px solid ${C.border}` : "1px solid transparent",
+                  borderBottom: activeTab === tab.id ? `1px solid ${C.white}` : `1px solid transparent`,
+                  fontWeight: activeTab === tab.id ? 600 : 400, marginBottom: -1,
+                }}>
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="mx-5 rounded-b-lg rounded-tr-lg" style={{ background: C.white, border: `1px solid ${C.border}` }}>
+            {activeTab === "settings" && (
+              <div className="p-5">
+                <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${C.border}` }}>
+                  <div className="flex items-center px-4 py-2.5" style={{ background: "#fafafa", borderBottom: `1px solid ${C.border}` }}>
+                    <span className="w-8" /><span className="text-xs font-semibold" style={{ color: C.textSec, width: 80 }}>CD</span>
+                    <span className="text-xs font-semibold flex-1" style={{ color: C.textSec }}>매체명</span>
+                    <span className="text-xs font-semibold" style={{ color: C.textSec, width: 100 }}>DAU</span>
+                    <span className="text-xs font-semibold" style={{ color: C.textSec, width: 80 }}>상태</span>
+                    <span className="text-xs font-semibold" style={{ color: C.textSec, width: 80, textAlign: "center" }}>설정</span>
+                  </div>
+                  {medias.map((m, i) => (
+                    <div key={m.id} className="flex items-center px-4 py-3 cursor-pointer"
+                      style={{ borderBottom: i < medias.length - 1 ? `1px solid ${C.borderLight}` : "none", background: selectedMedia === m.id ? C.blueLight : C.white }}
+                      onClick={() => setSelectedMedia(m.id)}>
+                      <div className="w-8"><input type="checkbox" checked={selectedMedia === m.id} onChange={() => setSelectedMedia(m.id)} className="cursor-pointer" /></div>
+                      <span className="text-sm font-mono" style={{ color: C.textSec, width: 80 }}>{m.id}</span>
+                      <span className="text-sm font-medium flex-1" style={{ color: C.text }}>{m.name}</span>
+                      <span className="text-sm font-mono" style={{ color: C.textSec, width: 100 }}>{m.dau}</span>
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded" style={{ width: 80, background: m.status === "ON" ? C.greenLight : "#f5f5f5", color: m.status === "ON" ? C.green : C.textTer, textAlign: "center" }}>{m.status}</span>
+                      <div style={{ width: 80, textAlign: "center" }}>
+                        <button onClick={(e) => { e.stopPropagation(); setSelectedMedia(m.id); setShowModal(true); }}
+                          className="px-3 py-1.5 rounded text-xs cursor-pointer" style={{ background: C.blue, color: C.white, border: "none" }}>설정</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-4 text-xs" style={{ color: C.textTer }}>💡 매체를 선택한 후 "설정" 버튼을 클릭하면 네이트 콘텐츠 및 광고 설정 팝업이 열립니다.</p>
+              </div>
+            )}
+            {activeTab === "report" && <ReportTab />}
+          </div>
+
+          {showModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.5)" }}>
+              <div className="rounded-lg shadow-2xl overflow-hidden flex flex-col" style={{ width: 920, maxHeight: "90vh", background: C.white }}>
+                <div className="flex items-center justify-between px-6 py-4" style={{ background: C.headerBg }}>
+                  <div className="flex items-center gap-3">
+                    <span className="text-white font-bold">네이트 콘텐츠 상세 설정</span>
+                    <span className="text-xs px-2 py-0.5 rounded" style={{ background: "rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.8)" }}>
+                      {medias.find((m) => m.id === selectedMedia)?.name}
+                    </span>
+                  </div>
+                  <button onClick={() => setShowModal(false)} className="w-8 h-8 rounded flex items-center justify-center cursor-pointer text-xl"
+                    style={{ background: "transparent", border: "none", color: "rgba(255,255,255,0.7)" }}>✕</button>
+                </div>
+
+                <div className="flex items-center gap-3 px-9 py-2" style={{ background: "#fafafa", borderBottom: `1px solid ${C.border}` }}>
+                  <span className="text-xs font-semibold" style={{ color: C.textTer, width: 20 }} />
+                  <span className="text-xs font-semibold" style={{ color: C.textSec, width: 180 }}>메뉴명</span>
+                  <span className="text-xs font-semibold flex-1" style={{ color: C.textSec }}>CRM 부제목</span>
+                  <span className="text-xs font-semibold" style={{ color: C.textSec, width: 50, textAlign: "center" }}>순서</span>
+                  <span className="text-xs font-semibold" style={{ color: C.textSec, width: 44, textAlign: "center" }}>상태</span>
+                  <span style={{ width: 32 }} />
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-5" style={{ background: C.bg }}>
+                  {sections.map((s) => (
+                    <SectionItem key={s.id} item={s} expanded={expandedId === s.id}
+                      onExpand={() => setExpandedId(expandedId === s.id ? null : s.id)}
+                      onToggle={(v) => updateSection(s.id, { ...s, enabled: v })}
+                      onUpdate={(d) => updateSection(s.id, d)} />
+                  ))}
+                </div>
+
+                <div className="flex items-center justify-between px-6 py-3" style={{ background: "#fafafa", borderTop: `1px solid ${C.border}` }}>
+                  <span className="text-xs" style={{ color: C.textTer }}>ℹ️ 설정 변경 시 SDK에 실시간 반영됩니다</span>
+                  <div className="flex gap-2">
+                    <button onClick={() => setShowModal(false)} className="px-5 py-2 rounded text-sm cursor-pointer"
+                      style={{ background: C.white, color: C.textSec, border: `1px solid ${C.border}` }}>취소</button>
+                    <button onClick={() => setShowModal(false)} className="px-5 py-2 rounded text-sm font-semibold cursor-pointer"
+                      style={{ background: C.green, color: C.white, border: "none" }}>저장</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(React.createElement(App));
+  </script>
+</body>
+</html>
